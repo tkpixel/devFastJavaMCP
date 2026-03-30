@@ -60,25 +60,33 @@ class GitLabService {
           params: {
             path: config.GITLAB_TEMPLATES_PATH,
             ref: 'main',
+            recursive: true,
             per_page: 100,
             page: page,
           },
         });
 
-        const directories = response.data.filter((item: any) => item.type === 'tree');
+        const manifestBlobs = response.data.filter(
+          (item: any) => item.type === 'blob' && item.name === 'manifest.json'
+        );
 
-        for (const dir of directories) {
-          const manifestContent = await this.fetchFile(`${dir.path}/manifest.json`);
+        for (const blob of manifestBlobs) {
+          const manifestContent = await this.fetchFile(blob.path);
           if (manifestContent) {
             try {
               const manifest = JSON.parse(manifestContent);
+              // The directory path is everything except the filename
+              const dirPath = blob.path.substring(0, blob.path.lastIndexOf('/'));
+              // The template ID is the last directory name
+              const id = dirPath.split('/').pop() || dirPath;
+
               manifests.push({
                 ...manifest,
-                id: dir.name,
-                path: dir.path
+                id: id,
+                path: dirPath
               });
             } catch (e) {
-              process.stderr.write(`Error parsing manifest.json for ${dir.name}: ${e instanceof Error ? e.message : String(e)}\n`);
+              process.stderr.write(`Error parsing manifest.json for ${blob.path}: ${e instanceof Error ? e.message : String(e)}\n`);
             }
           }
         }
