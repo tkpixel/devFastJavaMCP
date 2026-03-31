@@ -1,0 +1,68 @@
+@startuml
+skinparam maxMessageSize 150
+skinparam responseMessageBelowArrow true
+
+actor "Developer" as dev
+participant "GitHub Copilot\n(IntelliJ Plugin)" as copilot
+participant "MCP Client\n(JSON-RPC)" as mcp_client
+participant "Node.js MCP Server\n(stdio)" as mcp_server
+database "GitLab API\n(HTTPS)" as gitlab
+
+dev -> copilot : "Generiere ein Login-Formular basierend auf internen Templates"
+activate copilot
+
+copilot -> mcp_client : LLM decides to use tool\n"search_templates"
+activate mcp_client
+
+note right of mcp_client
+  Communication via Standard I/O (stdio)
+  No HTTP ports opened locally!
+end note
+
+mcp_client -> mcp_server : JSON-RPC Request (stdin)\n{method: "tools/call", params: {name: "search_templates", arguments: {query: "login-form"}}}
+activate mcp_server
+
+mcp_server -> mcp_server : Parse JSON & check cache
+
+alt Cache Miss
+    mcp_server -> gitlab : GET /api/v4/projects/{id}/repository/tree?recursive=true
+    activate gitlab
+    gitlab --> mcp_server : Returns flat list of directories/blobs
+
+    mcp_server -> gitlab : GET manifest.json for matching templates
+    gitlab --> mcp_server : Returns JSON content
+    deactivate gitlab
+end
+
+mcp_server -> mcp_server : Filter results for "login-form"
+
+mcp_server --> mcp_client : JSON-RPC Response (stdout)\n{result: {content: [...]}}
+deactivate mcp_server
+
+mcp_client --> copilot : Provide tool execution result as LLM context
+deactivate mcp_client
+
+copilot -> copilot : LLM analyzes templates and needs full code
+
+copilot -> mcp_client : LLM decides to use tool\n"get_template_code"
+activate mcp_client
+
+mcp_client -> mcp_server : JSON-RPC Request (stdin)\n{method: "tools/call", params: {name: "get_template_code", arguments: {componentId: "login-form"}}}
+activate mcp_server
+
+mcp_server -> gitlab : GET template files via HTTPS
+activate gitlab
+gitlab --> mcp_server : Returns file contents (Java, FXML, CSS)
+deactivate gitlab
+
+mcp_server --> mcp_client : JSON-RPC Response (stdout)\n{result: {content: [...]}}
+deactivate mcp_server
+
+mcp_client --> copilot : Provide full code as LLM context
+deactivate mcp_client
+
+copilot -> copilot : LLM processes GitLab context\nand generates JavaFX code
+
+copilot --> dev : Renders generated code in IDE Chat
+deactivate copilot
+@enduml
