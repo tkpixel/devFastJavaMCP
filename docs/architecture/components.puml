@@ -1,0 +1,26 @@
+@startuml
+skinparam componentStyle uml2
+
+actor "AI Client (e.g., Copilot, Claude)" as Client
+
+node "Standalone MCP Server" {
+  component "@modelcontextprotocol/sdk" as SDK <<Transport Layer>>
+  component "GitLabService" as GitLabService <<Domain Logic>>
+  component "In-Memory Cache" as Cache <<Module>>
+}
+
+cloud "GitLab Instance" {
+  component "GitLab API" as GitLabAPI <<External Service>>
+}
+
+Client <--> SDK : JSON-RPC over stdio\n(stdin/stdout)
+SDK <--> GitLabService : internal method calls
+GitLabService <--> Cache : read/write templates\n(TTL based)
+GitLabService <--> GitLabAPI : HTTPS (REST)
+
+note right of SDK
+  The server relies entirely on stdio.
+  It does not expose any local HTTP/TCP ports.
+end note
+
+@enduml
