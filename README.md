@@ -12,6 +12,12 @@ A standalone Model Context Protocol (MCP) server that provides JavaFX and MVVM t
 - **Prompts**:
   - `generate_javafx_component`: Guided prompt to help the AI generate new components following internal standards.
 
+## Architecture / Sequence Flow
+
+The following diagram illustrates the typical request flow when a developer asks GitHub Copilot for a component, highlighting the JSON-RPC interactions over stdio and template retrieval from GitLab.
+
+![Sequence Flow Diagram](docs/sequence_flow.puml)
+
 ## Prerequisites
 
 - Node.js (v18 or higher)
