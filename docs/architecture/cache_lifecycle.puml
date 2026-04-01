@@ -1,0 +1,28 @@
+@startuml
+
+[*] --> Empty
+
+state "Empty / Uninitialized" as Empty
+state "FetchingFromGitLab" as Fetching
+state "Cached (Valid)" as Cached
+state "Expired (TTL > 5 min)" as Expired
+
+Empty --> Fetching : listTemplates()\nor getTemplate(id) called
+Fetching --> Cached : Data fetched successfully.\nUpdate lastFetch = Date.now()
+Cached --> Cached : listTemplates() / getTemplate(id)\nTime elapsed < cacheTTL
+Cached --> Expired : Time elapsed >= cacheTTL\n(5 minutes)
+Expired --> Fetching : listTemplates()\nor getTemplate(id) called
+
+note right of Cached
+  In Valid Cached state, templates
+  are returned immediately from memory,
+  avoiding GitLab API calls.
+end note
+
+note right of Expired
+  When expired, the next request will
+  trigger a fresh fetch from GitLab API
+  to prevent stale data and avoid rate limits.
+end note
+
+@enduml

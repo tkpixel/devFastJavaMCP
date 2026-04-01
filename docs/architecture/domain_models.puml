@@ -1,0 +1,39 @@
+@startuml
+
+interface TemplateManifest {
+  +id: string
+  +name: string
+  +description: string
+  +tags: string[]
+  +files: string[]
+  +path?: string
+}
+
+interface Template {
+  +manifest: TemplateManifest
+  +content: Record<string, string>
+}
+
+class GitLabService <<Singleton>> {
+  -axiosInstance: AxiosInstance
+  -cache: Map<string, Template>
+  -listCache: TemplateManifest[] | null
+  -cacheTTL: number = 300000
+  -lastFetch: number
+  --
+  +constructor()
+  -fetchFile(path: string): Promise<string>
+  +listTemplates(): Promise<TemplateManifest[]>
+  +getTemplate(id: string): Promise<Template | null>
+  +searchTemplates(query: string): Promise<TemplateManifest[]>
+}
+
+GitLabService "1" *-- "0..*" TemplateManifest : listCache
+GitLabService "1" *-- "0..*" Template : cache
+Template "1" *-- "1" TemplateManifest : manifest
+
+note bottom of GitLabService
+  The cacheTTL is 5 minutes (300000ms).
+end note
+
+@enduml

@@ -18,6 +18,24 @@ The following diagram illustrates the typical request flow when a developer asks
 
 ![Sequence Flow Diagram](docs/sequence_flow.puml)
 
+### Component Diagram
+
+This diagram visualizes the physical and logical boundaries of the server, demonstrating that it relies completely on stdio and does not expose local HTTP/TCP ports.
+
+![Component Diagram](docs/architecture/components.puml)
+
+### Domain Models
+
+This diagram illustrates the core TypeScript entities and properties of the GitLabService cache singleton.
+
+![Domain Models](docs/architecture/domain_models.puml)
+
+### Cache Lifecycle
+
+This state machine visualizes the 5-minute Time-To-Live (TTL) and validation logic of the in-memory cache to prevent excessive API requests to GitLab.
+
+![Cache Lifecycle](docs/architecture/cache_lifecycle.puml)
+
 ## Prerequisites
 
 - Node.js (v18 or higher)
