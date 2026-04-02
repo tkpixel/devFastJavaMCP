@@ -96,7 +96,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
       name: `${t.name} Documentation`,
       mimeType: 'text/markdown',
     });
-    for (const f of t.files) {
+    for (const f of (t.files || [])) {
       resources.push({
         uri: `gitlab://templates/${t.id}/${f}`,
         name: `${t.name} - ${f}`,

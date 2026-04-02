@@ -1,6 +1,12 @@
 import { config as dotenvConfig } from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-dotenvConfig({ quiet: true });
+// Resolve .env relative to the dist/src directory → always finds the project root .env
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const envPath = resolve(__dirname, '..', '.env');
+
+dotenvConfig({ path: envPath, quiet: true });
 
 export const config = {
   GITLAB_URL: process.env.GITLAB_URL || 'https://gitlab.com',

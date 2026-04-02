@@ -6,7 +6,7 @@ export interface TemplateManifest {
   name: string;
   description: string;
   tags: string[];
-  files: string[];
+  files?: string[];
   path?: string;
 }
 
@@ -23,17 +23,20 @@ class GitLabService {
   private lastFetch: number = 0;
 
   constructor() {
+    const baseUrl = (config.GITLAB_URL || '').replace(/\/$/, '');
     this.axiosInstance = axios.create({
-      baseURL: `${config.GITLAB_URL}/api/v4/projects/${config.GITLAB_PROJECT_ID}`,
+      baseURL: `${baseUrl}/api/v4/projects/${config.GITLAB_PROJECT_ID}`,
       headers: {
         'PRIVATE-TOKEN': config.GITLAB_PAT,
       },
     });
   }
 
+  private readonly branch: string = 'master';
+
   private async fetchFile(path: string): Promise<string> {
     try {
-      const response = await this.axiosInstance.get(`/repository/files/${encodeURIComponent(path)}/raw?ref=main`, {
+      const response = await this.axiosInstance.get(`/repository/files/${encodeURIComponent(path)}/raw?ref=${this.branch}`, {
         responseType: 'text'
       });
       return response.data;
@@ -59,26 +62,34 @@ class GitLabService {
         const response = await this.axiosInstance.get('/repository/tree', {
           params: {
             path: config.GITLAB_TEMPLATES_PATH,
-            ref: 'main',
+            ref: this.branch,
+            recursive: true,
             per_page: 100,
             page: page,
           },
         });
 
-        const directories = response.data.filter((item: any) => item.type === 'tree');
+        const manifestBlobs = response.data.filter(
+          (item: any) => item.type === 'blob' && item.name === 'manifest.json'
+        );
 
-        for (const dir of directories) {
-          const manifestContent = await this.fetchFile(`${dir.path}/manifest.json`);
+        for (const blob of manifestBlobs) {
+          const manifestContent = await this.fetchFile(blob.path);
           if (manifestContent) {
             try {
               const manifest = JSON.parse(manifestContent);
+              // The directory path is everything except the filename
+              const dirPath = blob.path.substring(0, blob.path.lastIndexOf('/'));
+              // The template ID is the last directory name
+              const id = dirPath.split('/').pop() || dirPath;
+
               manifests.push({
                 ...manifest,
-                id: dir.name,
-                path: dir.path
+                id: id,
+                path: dirPath
               });
             } catch (e) {
-              process.stderr.write(`Error parsing manifest.json for ${dir.name}: ${e instanceof Error ? e.message : String(e)}\n`);
+              process.stderr.write(`Error parsing manifest.json for ${blob.path}: ${e instanceof Error ? e.message : String(e)}\n`);
             }
           }
         }
@@ -116,17 +127,37 @@ class GitLabService {
     const templatePath = manifest.path;
     const content: Record<string, string> = {};
 
-    for (const fileName of manifest.files) {
+    // If manifest has no files list, auto-discover files from repo tree
+    let filesToFetch = manifest.files || [];
+    if (filesToFetch.length === 0) {
+      try {
+        const treeResponse = await this.axiosInstance.get('/repository/tree', {
+          params: {
+            path: templatePath,
+            ref: this.branch,
+            recursive: false,
+            per_page: 100,
+          },
+        });
+        filesToFetch = treeResponse.data
+          .filter((item: any) => item.type === 'blob' && item.name !== 'manifest.json')
+          .map((item: any) => item.name);
+      } catch (e) {
+        process.stderr.write(`Error auto-discovering files for ${id}: ${e instanceof Error ? e.message : String(e)}\n`);
+      }
+    }
+
+    for (const fileName of filesToFetch) {
       const fileContent = await this.fetchFile(`${templatePath}/${fileName}`);
       content[fileName] = fileContent;
     }
 
-    // Also try to fetch README.md if it exists and not in files
-    if (!manifest.files.includes('README.md')) {
-        const readme = await this.fetchFile(`${templatePath}/README.md`);
-        if (readme) {
-            content['README.md'] = readme;
-        }
+    // Also try to fetch README.md if it exists and not already fetched
+    if (!filesToFetch.includes('README.md')) {
+      const readme = await this.fetchFile(`${templatePath}/README.md`);
+      if (readme) {
+        content['README.md'] = readme;
+      }
     }
 
     const template = { manifest, content };
@@ -136,8 +167,12 @@ class GitLabService {
 
   async searchTemplates(query: string): Promise<TemplateManifest[]> {
     const templates = await this.listTemplates();
+    if (!query || query.trim() === '') {
+      return templates;
+    }
     const q = query.toLowerCase();
     return templates.filter(t =>
+      t.id.toLowerCase().includes(q) ||
       t.name.toLowerCase().includes(q) ||
       t.description.toLowerCase().includes(q) ||
       t.tags.some(tag => tag.toLowerCase().includes(q))
